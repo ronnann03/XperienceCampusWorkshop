@@ -1,0 +1,94 @@
+name: ✅ Validate PR
+
+# Se ejecuta solo en Pull Requests que modifican contributors/
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "contributors/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    name: Validate contribution
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout del PR
+      - name: 📥 Checkout PR
+        uses: actions/checkout@v4
+
+      # 2. Setup de Node.js
+      - name: 🔧 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # 3. Validar archivos JSON
+      - name: ✅ Validate JSON files
+        id: validate
+        run: |
+          echo "Validando archivos de colaboradores..."
+          
+          # Ejecutar el generador (valida automáticamente)
+          if node scripts/generate-contributors.js; then
+            echo "validation=success" >> $GITHUB_OUTPUT
+            echo "✅ Validación exitosa"
+          else
+            echo "validation=failed" >> $GITHUB_OUTPUT
+            echo "❌ Validación fallida"
+            exit 1
+          fi
+
+      # 4. Comentar en el PR si es exitoso
+      - name: 💬 Comment success
+        if: steps.validate.outputs.validation == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ✅ Validación Exitosa
+
+              ¡Tu contribución ha sido validada correctamente! 🎉
+
+              **Siguiente paso:** Un maintainer revisará y mergeará tu PR.
+
+              Una vez mergeado:
+              - 🤖 GitHub Actions generará automáticamente \`public/index.json\`
+              - 🚀 Tu perfil se desplegará automáticamente a GitHub Pages
+              - 🌐 Aparecerás en: https://dav082004.github.io/XperienceCampusWorkshop/
+
+              ¡Gracias por contribuir! 🙌`
+            })
+
+      # 5. Comentar en el PR si falló
+      - name: 💬 Comment failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ❌ Validación Fallida
+
+              Hubo errores en la validación de tu contribución.
+
+              **Por favor revisa:**
+              - ✅ Tu archivo JSON tiene sintaxis válida
+              - ✅ Incluye los campos obligatorios: \`name\`, \`nickname\`, \`hobbies\`
+              - ✅ El array \`hobbies\` tiene entre 1 y 4 elementos
+              - ✅ La descripción tiene máximo 150 caracteres
+
+              **Verifica los logs arriba** ⬆️ para ver los errores específicos.
+
+              Una vez corregido, solo haz commit y push - este workflow se ejecutará automáticamente.`
+            })

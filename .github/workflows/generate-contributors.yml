@@ -7,16 +7,13 @@ on:
       - main
     paths:
       - "contributors/**"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "contributors/**"
   workflow_dispatch: # Permite ejecución manual
 
 # Permisos necesarios para hacer commits automáticos
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   generate:
@@ -28,7 +25,8 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Historial completo para commits
+          fetch-depth: 0
+          ref: ${{ github.head_ref || github.ref_name }}
 
       # 2. Setup de Node.js
       - name: 🔧 Setup Node.js
@@ -57,9 +55,9 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-      # 6. Commit y push de cambios
+      # 6. Commit y push de cambios (solo en main branch)
       - name: 📤 Commit and push changes
-        if: steps.check_changes.outputs.changes == 'true'
+        if: steps.check_changes.outputs.changes == 'true' && github.ref == 'refs/heads/main'
         run: |
           git add public/index.json
           git commit -m "🤖 Auto-generate contributors data
@@ -76,10 +74,39 @@ jobs:
       - name: ✅ Success
         if: steps.check_changes.outputs.changes == 'true'
         run: |
-          echo "✨ Contributors files generated and committed successfully!"
+          echo "✨ Contributors files generated successfully!"
 
       # 8. Mensaje si no hay cambios
       - name: ℹ️  No changes
         if: steps.check_changes.outputs.changes == 'false'
         run: |
           echo "ℹ️  No changes detected in contributors data."
+
+  # Job para deploy a GitHub Pages
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: generate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 🔧 Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: 📦 Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: 🚀 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
